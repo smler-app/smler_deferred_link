@@ -4,9 +4,12 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:smler_deferred_link/smler_deferred_link.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:app_links/app_links.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('🚀 Stack Deferred Link example starting on platform: ${Platform.operatingSystem}');
   runApp(const MyApp());
 }
 
@@ -34,7 +37,30 @@ class _MyAppState extends State<MyApp> {
   @override
   void initState() {
     super.initState();
-    _loadPlatformData();
+    _handleNavigation();
+  }
+
+  Future<void> _handleNavigation() async {
+    final appLinks = AppLinks();
+    final prefs = await SharedPreferences.getInstance();
+    final isFirstLaunch = prefs.getBool('smler_deferred_link.first_launch') ?? true;
+
+    if (isFirstLaunch) {
+      // Perform navigation logic here
+      debugPrint('Navigating to the deferred link destination...');
+      _loadPlatformData();
+      // Mark first-launch check completed
+      await prefs.setBool('smler_deferred_link.first_launch', false);
+    } else {
+      appLinks.uriLinkStream.listen((Uri? uri) {
+        if (uri != null) {
+          debugPrint('Received deep link: $uri');
+          // Handle deep link navigation here
+        }
+      }, onError: (err) {
+        debugPrint('Error receiving deep link: $err');
+      });
+    }
   }
 
   /// -------------------------------------------------------------------------

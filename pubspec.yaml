@@ -1,10 +1,10 @@
 name: smler_deferred_link
 description: "Lightweight Flutter plugin enabling Android Install Referrer & iOS clipboard deferred deep linking to land users on exact screens."
 version: 1.0.1
-homepage: https://github.com/stackobea/smler_deferred_link
-repository: https://github.com/stackobea/smler_deferred_link
-issue_tracker: https://github.com/stackobea/smler_deferred_link/issues
-documentation: https://github.com/stackobea/smler_deferred_link/
+homepage: https://github.com/smler-app/smler_deferred_link
+repository: https://github.com/smler-app/smler_deferred_link
+issue_tracker: https://github.com/smler-app/smler_deferred_link/issues
+documentation: https://github.com/smler-app/smler_deferred_link/
 
 environment:
   sdk: '>=3.3.0 <4.0.0'

@@ -12,6 +12,8 @@ dependencies:
   smler_deferred_link:
     path: ../
   cupertino_icons: ^1.0.8
+  shared_preferences: ^2.1.0
+  app_links: ^7.0.0
 
 dev_dependencies:
   integration_test:

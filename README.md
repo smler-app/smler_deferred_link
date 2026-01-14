@@ -14,10 +14,6 @@ heavy attribution SDKs.
 Deferred deep linking allows your user to install your app after clicking a link, and still land on
 the correct screen or carry referral metadata after install.
 
-
-![Stack Deferred Link Banner](https://raw.githubusercontent.com/stackobea/smler_deferred_link/main/pub_dev_banner.png)
-
-
 ## 📘 How It Works — Deferred Deep Linking (Android + iOS)
 
 If the user has not installed the app and they click a deep link, it will first open in the phone’s
@@ -211,7 +207,7 @@ No permissions required on both platforms.
 Reads Google Play Install Referrer once.
 
 ```dart
-final info = await StackDeferredLink.getInstallReferrerAndroid();
+final info = await SmlerkDeferredLink.getInstallReferrerAndroid();
 ```
 
 Returns: ReferrerInfo
@@ -227,7 +223,7 @@ info.installVersion;info.googlePlayInstantParam;
 Example
 
 ```dart
-final info = await StackDeferredLink.getInstallReferrerAndroid();
+final info = await SmlerDeferredLink.getInstallReferrerAndroid();
 final params = info.asQueryParameters;
 
 debugPrint(params['referrer']); // campaign123
@@ -256,7 +252,7 @@ This method works with:
 ✔ Example (Android Install Referrer)
 
 ```dart
-final info = await StackDeferredLink.getInstallReferrerAndroid();
+final info = await SmlerDeferredLink.getInstallReferrerAndroid();
 final ref = info.getParam('ref');
 print(ref); // e.g. "promo123"
 
@@ -287,7 +283,7 @@ Throws
 Reads clipboard → checks patterns → returns matched deep link + params.
 
 ```dart
-final result = await StackDeferredLink.getInstallReferrerIos(deepLinks: ["https://example.com/profile","example.com","sub.example.com"]);
+final result = await SmlerDeferredLink.getInstallReferrerIos(deepLinks: ["https://example.com/profile","example.com","sub.example.com"]);
 
 ```
 
@@ -316,7 +312,7 @@ Path must match pattern prefix (optional)
 Example
 
 ```dart
-final res = await StackDeferredLink.getInstallReferrerIos(deepLinks: ["example.com", "example.com/profile"]);
+final res = await SmlerDeferredLink.getInstallReferrerIos(deepLinks: ["example.com", "example.com/profile"]);
 
 if (res != null) {
   final referrer = res.getParam('referrer');
@@ -349,11 +345,11 @@ class _MyAppState extends State<MyApp> {
   Future<void> _init() async {
     try {
       if (Platform.isAndroid) {
-        final info = await StackDeferredLink.getInstallReferrerAndroid();
+        final info = await SmlerDeferredLink.getInstallReferrerAndroid();
         params = info.asQueryParameters;
         status = "Android Referrer Loaded";
       } else if (Platform.isIOS) {
-        final res = await StackDeferredLink.getInstallReferrerIos(
+        final res = await SmlerDeferredLink.getInstallReferrerIos(
           deepLinks: ["example.com", "example.com/profile"],
         );
         if (res != null) {
@@ -374,7 +370,7 @@ class _MyAppState extends State<MyApp> {
   Widget build(BuildContext ctx) {
     return MaterialApp(
       home: Scaffold(
-        appBar: AppBar(title: const Text("Stack Deferred Link")),
+        appBar: AppBar(title: const Text("Smler Deferred Link")),
         body: Padding(
           padding: const EdgeInsets.all(16),
           child: ListView(
