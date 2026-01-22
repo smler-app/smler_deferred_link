@@ -160,6 +160,7 @@ class HelperReferrer {
   ///
   /// [clickId] - The click ID from query parameters
   /// [pathParams] - Map containing 'shortCode' and optional 'dltHeader'
+  /// [domain] - The domain name from the referrer URL
   ///
   /// Returns a Map with the API response data or error information.
   ///
@@ -169,11 +170,13 @@ class HelperReferrer {
   /// final response = await HelperReferrer.fetchTrackingData(
   ///   'click123',
   ///   pathParams,
+  ///   'example.com',
   /// );
   /// ```
   static Future<Map<String, dynamic>> fetchTrackingData(
     String clickId,
     Map<String, String?> pathParams,
+    String? domain,
   ) async {
     try {
       final url = 'https://smler.in/api/v2/track/$clickId';
@@ -189,6 +192,10 @@ class HelperReferrer {
       if (pathParams['dltHeader'] != null &&
           pathParams['dltHeader']!.isNotEmpty) {
         requestBody['dltHeader'] = pathParams['dltHeader'];
+      }
+
+      if (domain != null && domain.isNotEmpty) {
+        requestBody['domain'] = domain;
       }
 
       final response = await http.post(

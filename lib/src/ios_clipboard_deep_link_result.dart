@@ -107,7 +107,8 @@ class IosClipboardDeepLinkResult {
       return null;
     }
     final pathParams = extractShortCodeAndDltHeader();
-    return HelperReferrer.fetchTrackingData(clickId, pathParams);
+    final domain = uri.host;
+    return HelperReferrer.fetchTrackingData(clickId, pathParams, domain);
   }
 
   @override

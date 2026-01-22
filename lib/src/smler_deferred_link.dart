@@ -200,7 +200,18 @@ class ReferrerInfo {
       return null;
     }
     final pathParams = extractShortCodeAndDltHeader();
-    return HelperReferrer.fetchTrackingData(clickId, pathParams);
+    
+    // Extract domain from referrer URL
+    String? domain;
+    final ref = installReferrer?.trim();
+    if (ref != null && ref.isNotEmpty) {
+      final uri = ref.contains("://")
+          ? HelperReferrer.parseToUri(ref)
+          : Uri.tryParse("https://dummy/$ref");
+      domain = uri?.host;
+    }
+    
+    return HelperReferrer.fetchTrackingData(clickId, pathParams, domain);
   }
 
   @override
