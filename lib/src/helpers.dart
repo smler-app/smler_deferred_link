@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+
 class HelperReferrer {
   /// Returns true if [clipboard] deep link matches [pattern],
   /// supporting:
@@ -151,5 +154,65 @@ class HelperReferrer {
 
     // Otherwise, assume https://
     return tryParse('https://$trimmed');
+  }
+
+  /// Fetches tracking data from the Smler API.
+  ///
+  /// [clickId] - The click ID from query parameters
+  /// [pathParams] - Map containing 'shortCode' and optional 'dltHeader'
+  ///
+  /// Returns a Map with the API response data or error information.
+  ///
+  /// Example:
+  /// ```dart
+  /// final pathParams = referrerInfo.extractShortCodeAndDltHeader();
+  /// final response = await HelperReferrer.fetchTrackingData(
+  ///   'click123',
+  ///   pathParams,
+  /// );
+  /// ```
+  static Future<Map<String, dynamic>> fetchTrackingData(
+    String clickId,
+    Map<String, String?> pathParams,
+  ) async {
+    try {
+      final url = 'https://smler.in/api/v2/track/$clickId';
+
+      // Prepare request body with optional parameters
+      final Map<String, dynamic> requestBody = {};
+
+      if (pathParams['shortCode'] != null &&
+          pathParams['shortCode']!.isNotEmpty) {
+        requestBody['shortCode'] = pathParams['shortCode']!;
+      }
+
+      if (pathParams['dltHeader'] != null &&
+          pathParams['dltHeader']!.isNotEmpty) {
+        requestBody['dltHeader'] = pathParams['dltHeader'];
+      }
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        return data;
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}',
+          'message': response.body,
+        };
+      }
+    } catch (e) {
+      return {
+        'error': 'Exception',
+        'message': e.toString(),
+      };
+    }
   }
 }

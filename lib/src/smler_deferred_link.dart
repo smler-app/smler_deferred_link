@@ -176,6 +176,33 @@ class ReferrerInfo {
     }
   }
 
+  /// Tracks a click by sending data to the Smler API.
+  ///
+  /// Automatically extracts clickId from query parameters and shortCode/dltHeader from
+  /// the referrer URL path, then sends them to the tracking API.
+  ///
+  /// The clickId is extracted from the 'clickId' query parameter in the referrer URL.
+  /// If clickId doesn't exist or is empty, returns null without making an API call.
+  ///
+  /// Returns a Map with the API response data, error information, or null if no clickId.
+  ///
+  /// Example:
+  /// ```dart
+  /// final referrerInfo = await SmlerDeferredLink.getInstallReferrerAndroid();
+  /// final response = await referrerInfo.trackClick();
+  /// if (response != null) {
+  ///   print('Tracking response: $response');
+  /// }
+  /// ```
+  Future<Map<String, dynamic>?> trackClick() async {
+    final clickId = getParam('clickId');
+    if (clickId.isEmpty) {
+      return null;
+    }
+    final pathParams = extractShortCodeAndDltHeader();
+    return HelperReferrer.fetchTrackingData(clickId, pathParams);
+  }
+
   @override
   String toString() {
     return 'ReferrerInfo('

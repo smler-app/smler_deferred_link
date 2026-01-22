@@ -230,6 +230,46 @@ debugPrint(params['referrer']); // campaign123
 debugPrint(params['uid']); // optional
 ```
 
+### Extracting shortCode and dltHeader from Path
+
+> ReferrerInfo.extractShortCodeAndDltHeader() extracts structured path segments from the referrer URL.
+
+Supports two formats:
+- `https://domain.com/[dltHeader]/[shortCode]` - with optional dltHeader
+- `https://domain.com/[shortCode]` - shortCode only
+
+Example:
+
+```dart
+final info = await SmlerDeferredLink.getInstallReferrerAndroid();
+final pathParams = info.extractShortCodeAndDltHeader();
+
+debugPrint(pathParams['shortCode']); // e.g., "abc123"
+debugPrint(pathParams['dltHeader']); // e.g., "promo" or null
+```
+
+### Tracking Clicks
+
+> ReferrerInfo.trackClick() automatically sends tracking data to the Smler API.
+
+This method:
+- Extracts `clickId` from the `clickId` query parameter
+- Extracts `shortCode` and optional `dltHeader` from the URL path
+- Sends tracking data to `https://smler.in/api/v2/track/{clickId}`
+- Returns `null` if `clickId` doesn't exist (no API call made)
+
+Example:
+
+```dart
+final info = await SmlerDeferredLink.getInstallReferrerAndroid();
+final response = await info.trackClick();
+
+if (response != null) {
+  debugPrint('Tracking successful: $response');
+} else {
+  debugPrint('No clickId found, tracking skipped');
+}
+```
 
 
 ### Extracting a Single Query Parameter
@@ -296,6 +336,56 @@ result.getParam("referrer"); // campaign123
 result.getParam("uid");
 ```
 
+### Extracting shortCode and dltHeader from Path (iOS)
+
+> IosClipboardDeepLinkResult.extractShortCodeAndDltHeader() extracts structured path segments from the deep link URL.
+
+Supports two formats:
+- `https://domain.com/[dltHeader]/[shortCode]` - with optional dltHeader
+- `https://domain.com/[shortCode]` - shortCode only
+
+Example:
+
+```dart
+final result = await SmlerDeferredLink.getInstallReferrerIos(
+  deepLinks: ["example.com"],
+);
+
+if (result != null) {
+  final pathParams = result.extractShortCodeAndDltHeader();
+  debugPrint(pathParams['shortCode']); // e.g., "abc123"
+  debugPrint(pathParams['dltHeader']); // e.g., "promo" or null
+}
+```
+
+### Tracking Clicks (iOS)
+
+> IosClipboardDeepLinkResult.trackClick() automatically sends tracking data to the Smler API.
+
+This method:
+- Extracts `clickId` from the `clickId` query parameter
+- Extracts `shortCode` and optional `dltHeader` from the URL path
+- Sends tracking data to `https://smler.in/api/v2/track/{clickId}`
+- Returns `null` if `clickId` doesn't exist (no API call made)
+
+Example:
+
+```dart
+final result = await SmlerDeferredLink.getInstallReferrerIos(
+  deepLinks: ["example.com"],
+);
+
+if (result != null) {
+  final response = await result.trackClick();
+  
+  if (response != null) {
+    debugPrint('Tracking successful: $response');
+  } else {
+    debugPrint('No clickId found, tracking skipped');
+  }
+}
+```
+
 Matching Rules
 
 Accepts:
@@ -335,6 +425,7 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   String? status;
   Map<String, String> params = {};
+  Map<String, dynamic>? trackingResponse;
 
   @override
   void initState() {
@@ -348,6 +439,9 @@ class _MyAppState extends State<MyApp> {
         final info = await SmlerDeferredLink.getInstallReferrerAndroid();
         params = info.asQueryParameters;
         status = "Android Referrer Loaded";
+        
+        // Track click automatically
+        trackingResponse = await info.trackClick();
       } else if (Platform.isIOS) {
         final res = await SmlerDeferredLink.getInstallReferrerIos(
           deepLinks: ["example.com", "example.com/profile"],
@@ -355,6 +449,9 @@ class _MyAppState extends State<MyApp> {
         if (res != null) {
           params = res.queryParameters;
           status = "iOS Clipboard Deep Link Loaded";
+          
+          // Track click automatically
+          trackingResponse = await res.trackClick();
         } else {
           status = "No deep link found";
         }
@@ -379,6 +476,11 @@ class _MyAppState extends State<MyApp> {
               const SizedBox(height: 20),
               const Text("Params:", style: TextStyle(fontSize: 18)),
               ...params.entries.map((e) => Text("${e.key}: ${e.value}")),
+              if (trackingResponse != null) ...[
+                const SizedBox(height: 20),
+                const Text("Tracking Response:", style: TextStyle(fontSize: 18)),
+                Text(trackingResponse.toString()),
+              ],
             ],
           ),
         ),
