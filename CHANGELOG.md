@@ -1,3 +1,6 @@
+## 1.1.2
+  - Support for passing custom domain in payload
+
 ## 1.1.0
   - Added a dedicated function for tracking deferred deep link 
 
