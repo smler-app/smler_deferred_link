@@ -123,6 +123,59 @@ class ReferrerInfo {
     return uri.queryParameters[key] ?? "";
   }
 
+  /// Extracts shortCode and optional dltHeader from the referrer URL.
+  ///
+  /// Supports two formats:
+  /// - `https://domain.com/[dltHeader]/[shortCode]` - with optional dltHeader
+  /// - `https://domain.com/[shortCode]` - shortCode only
+  ///
+  /// Returns a Map with keys 'shortCode' and 'dltHeader'.
+  /// If dltHeader is not present, it will be null.
+  /// If the referrer cannot be parsed or doesn't match the format, returns empty strings/null.
+  ///
+  /// Example:
+  /// ```dart
+  /// final result = referrerInfo.extractShortCodeAndDltHeader();
+  /// final shortCode = result['shortCode']; // e.g., "abc123"
+  /// final dltHeader = result['dltHeader']; // e.g., "promo" or null
+  /// ```
+  Map<String, String?> extractShortCodeAndDltHeader() {
+    final ref = installReferrer?.trim();
+    if (ref == null || ref.isEmpty) {
+      return {'shortCode': '', 'dltHeader': null};
+    }
+
+    // If URL-like, parse it
+    final uri = ref.contains("://")
+        ? HelperReferrer.parseToUri(ref)
+        : Uri.tryParse("https://dummy/$ref");
+
+    if (uri == null) {
+      return {'shortCode': '', 'dltHeader': null};
+    }
+
+    // Get path segments (excluding empty segments)
+    final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+
+    if (segments.isEmpty) {
+      return {'shortCode': '', 'dltHeader': null};
+    }
+
+    // If we have 2 segments: [dltHeader, shortCode]
+    // If we have 1 segment: [shortCode]
+    if (segments.length >= 2) {
+      return {
+        'dltHeader': segments[0],
+        'shortCode': segments[1],
+      };
+    } else {
+      return {
+        'dltHeader': null,
+        'shortCode': segments[0],
+      };
+    }
+  }
+
   @override
   String toString() {
     return 'ReferrerInfo('
