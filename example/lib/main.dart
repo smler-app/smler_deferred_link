@@ -142,7 +142,7 @@ class _MyAppState extends State<MyApp> {
       );
 
       if (result == null) {
-        debugPrint('ℹ No matching deep link found in clipboard.');
+        debugPrint('No matching deep link found in clipboard.');
         setState(() {
           _errorMessage = 'No matching deep link found in clipboard.';
         });

@@ -94,8 +94,14 @@ class ReferrerInfo {
       return const {};
     }
 
-    // Treat the referrer string like a query segment: key1=val1&key2=val2...
-    final uri = Uri.parse('https://dummy?$ref');
+    // If URL-like, parse normally, else wrap inside dummy URL
+    final uri = ref.contains("://")
+        ? HelperReferrer.parseToUri(ref)
+        : Uri.tryParse("https://dummy?$ref");
+
+    if (uri == null) {
+      return const {};
+    }
     return uri.queryParameters;
   }
 
