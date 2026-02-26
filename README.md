@@ -105,14 +105,19 @@ This plugin solves both platforms:
 |-------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
 | **Android** | Uses official **Google Play Install Referrer API** to read the `referrer` param from Play Store.                                                  |
 | **iOS**     | Reads **clipboard deep links** (URL copied before launching app). Pattern-matches domains, subdomains, and paths, then extracts query parameters. |
+| **Advanced** | Optional **probabilistic matching** for enhanced attribution when traditional methods fail (requires network call).                              |
 
 ## 🚀 Why Use This Plugin?
 
 ✔ Lightweight (no SDKs like Branch / Adjust / AppsFlyer)
 
-✔ 100% Offline, No Network Calls
+✔ Core features work 100% offline
 
-✔ Zero configuration on backend
+✔ Optional probabilistic matching for advanced attribution
+
+✔ Automatic iOS fallback when clipboard is empty
+
+✔ Zero configuration on backend for basic usage
 
 ✔ Works from 1st launch
 
@@ -128,21 +133,27 @@ This plugin solves both platforms:
 
 ## 🧠 Use Cases
 
-Track marketing campaign using:
+✅ Track marketing campaign using:
 
 > ?referrer=campaign123
 
-Store affiliate codes
+✅ Store affiliate codes
 
-Open after-install screens:
+✅ Open after-install screens:
 
 > https://example.com/profile?uid=1001
 
-Route iOS users from Safari → clipboard → app
+✅ Route iOS users from Safari → clipboard → app
 
-Internal routing: /bonus?referrer=promo50
+✅ Internal routing: /bonus?referrer=promo50
 
-Attribution without Firebase Dynamic Links / Branch
+✅ Attribution without Firebase Dynamic Links / Branch
+
+✅ Fallback attribution when clipboard is empty (iOS)
+
+✅ Cross-platform probabilistic device fingerprinting
+
+✅ High-confidence install-to-click matching via API
 
 
 ## 🏗 Architecture Overview
@@ -174,6 +185,10 @@ Add:
 dependencies:
   smler_deferred_link: <latest-version>
 ```
+
+The plugin automatically includes:
+- `http` for API calls (probabilistic matching)
+- `device_info_plus` for device fingerprinting
 
 ### ⚙ Android Setup
 
@@ -411,6 +426,205 @@ if (res != null) {
 
 ```
 
+## 📊 Probabilistic Matching (Advanced Attribution)
+
+Probabilistic matching enables accurate install attribution by analyzing device and network fingerprints when traditional methods fail or return insufficient data. This is particularly useful for iOS users when clipboard matching fails or for validating Android install referrer data.
+
+### When to Use Probabilistic Matching
+
+✅ **iOS Fallback**: When `getInstallReferrerIos()` returns `null` (clipboard empty or no match)
+
+✅ **Cross-Platform Validation**: Confirm install attribution across both platforms
+
+✅ **Enhanced Attribution**: Get additional click metadata and campaign information
+
+### How It Works
+
+1. **Automatic Device Detection**: Plugin automatically extracts device model, OS version, and platform
+2. **API Matching**: Sends fingerprint to Smler API for probabilistic matching
+3. **Confidence Score**: Returns a match score (0.0 to 1.0) indicating confidence level
+4. **Smart Threshold**: Only fetch tracking data when score > 0.65 for high-confidence matches
+
+### 📌 API: getProbabilisticMatch()
+
+Performs probabilistic matching to link install events to clicks.
+
+```dart
+final result = await HelperReferrer.getProbabilisticMatch(
+  domain: 'example.com',
+  clickId: 'optional-click-id', // optional
+);
+```
+
+**Parameters:**
+- `domain` (required): Your domain name (e.g., "example.com")
+- `clickId` (optional): Click identifier for enhanced matching
+
+**Returns:** `Map<String, dynamic>` with:
+- `matched` (bool): Whether a match was found
+- `score` (double): Confidence score (0.0 - 1.0)
+- `matchedAttributes` (List): Attributes that matched
+- `clickDetails` (Map): Details of the matched click
+- `shortUrl` (Map): Complete short URL object with metadata
+- `fingerprint` (Map): Device fingerprint data
+- `domain` (String): Extracted domain from shortUrl
+- `pathParams` (Map): Contains `shortCode`, `dltHeader`, and `domain`
+
+**Example:**
+
+```dart
+import 'package:smler_deferred_link/src/helpers.dart';
+
+final result = await HelperReferrer.getProbabilisticMatch(
+  domain: 'example.com',
+);
+
+if (result['matched'] == true) {
+  final score = result['score'] as double;
+  print('Match confidence: $score');
+  
+  if (score > 0.65) {
+    // High confidence - proceed with attribution
+    final pathParams = result['pathParams'];
+    print('Short code: ${pathParams['shortCode']}');
+    print('Domain: ${pathParams['domain']}');
+  }
+}
+```
+
+### 📌 API: fetchTrackingData()
+
+Fetches detailed tracking data from the Smler API when you have a `clickId`.
+
+```dart
+final trackingData = await HelperReferrer.fetchTrackingData(
+  clickId,
+  pathParams,
+  domain,
+);
+```
+
+**Parameters:**
+- `clickId` (String): The click ID from query parameters
+- `pathParams` (Map<String, String?>): Map containing `shortCode` and optional `dltHeader`
+- `domain` (String?): The domain name from the referrer URL
+
+**Returns:** `Map<String, dynamic>` with API response data or error information
+
+**Example:**
+
+```dart
+final clickDetails = result['clickDetails'] as Map<String, dynamic>?;
+final clickId = clickDetails?['clickId'] as String?;
+final pathParams = result['pathParams'] as Map<String, dynamic>?;
+
+if (clickId != null && pathParams != null) {
+  final trackingData = await HelperReferrer.fetchTrackingData(
+    clickId,
+    Map<String, String?>.from(pathParams),
+    result['domain'] as String?,
+  );
+  
+  print('Tracking data: $trackingData');
+}
+```
+
+### 🔄 iOS Fallback Pattern (Recommended)
+
+Use probabilistic matching as a fallback when clipboard matching fails on iOS:
+
+```dart
+Future<void> _loadInstallReferrerIos() async {
+  try {
+    final result = await SmlerDeferredLink.getInstallReferrerIos(
+      deepLinks: ['example.com', 'example.com/profile'],
+    );
+
+    if (result == null) {
+      // Clipboard empty or no match - fall back to probabilistic
+      debugPrint('📊 Falling back to probabilistic matching...');
+      await _tryProbabilisticMatch('example.com');
+      return;
+    }
+
+    // Process clipboard result
+    final params = result.queryParameters;
+    // ... handle navigation
+  } catch (e) {
+    debugPrint('Error: $e');
+  }
+}
+
+Future<void> _tryProbabilisticMatch(String domain) async {
+  final result = await HelperReferrer.getProbabilisticMatch(
+    domain: domain,
+  );
+
+  if (result['matched'] == true) {
+    final score = result['score'] as double;
+    
+    if (score > 0.65) {
+      // High confidence - fetch tracking data
+      final clickDetails = result['clickDetails'] as Map?;
+      final clickId = clickDetails?['clickId'] as String?;
+      final pathParams = result['pathParams'] as Map?;
+
+      if (clickId != null && pathParams != null) {
+        final trackingData = await HelperReferrer.fetchTrackingData(
+          clickId,
+          Map<String, String?>.from(pathParams),
+          result['domain'] as String?,
+        );
+        
+        // Process tracking data and navigate
+        debugPrint('Attribution confirmed: $trackingData');
+      }
+    }
+  }
+}
+```
+
+### 🎯 Android Enhanced Attribution
+
+Combine install referrer with probabilistic matching for complete attribution:
+
+```dart
+Future<void> _loadInstallReferrerAndroid() async {
+  final info = await SmlerDeferredLink.getInstallReferrerAndroid();
+  final params = info.asQueryParameters;
+  
+  // Get basic referrer data
+  debugPrint('Referrer: ${info.installReferrer}');
+  
+  // Enhance with probabilistic matching
+  final result = await HelperReferrer.getProbabilisticMatch(
+    domain: 'example.com',
+  );
+  
+  if (result['matched'] == true && result['score'] > 0.65) {
+    // Cross-validate attribution
+    debugPrint('Probabilistic match confirms attribution');
+    // ... proceed with tracking
+  }
+}
+```
+
+### ⚡ No Permissions Required
+
+Device and OS information is automatically extracted using the `device_info_plus` package without requiring any special permissions. The plugin accesses:
+
+✅ Device manufacturer and model (e.g., "Samsung Galaxy S21")
+
+✅ OS version (e.g., "Android 13", "iOS 16.4")
+
+✅ System name and basic hardware info
+
+❌ No unique identifiers (IMEI, serial numbers, advertising IDs)
+
+❌ No runtime permission dialogs
+
+❌ No manifest/plist configuration needed
+
 ## 🧪 Full Usage Example (Android + iOS)
 
 ```dart
@@ -510,29 +724,43 @@ await Clipboard.setData(const ClipboardData(text: ""));
 
 ## 🔍 Troubleshooting
 
-❓ Android returns empty referrer
+❓ **Android returns empty referrer**
 
-Play Store did not include any referrer parameter.
+Play Store did not include any referrer parameter. Consider using probabilistic matching as a fallback.
 
-❓ iOS returns null
+❓ **iOS returns null**
 
-Clipboard may be empty or the link does not match any allowed pattern.
+Clipboard may be empty or the link does not match any allowed pattern. Use probabilistic matching as a fallback strategy.
 
-❓ iOS parsing fails
+❓ **iOS parsing fails**
 
 Ensure your passed URL patterns include base domains.
 
-❓ Cannot parse URL
+❓ **Cannot parse URL**
+
+Clipboard might contain text that is not a URL.
+
+❓ **Probabilistic match score is too low (< 0.65)**
+
+This indicates low confidence in the match. The device fingerprint may not match any recent clicks, or multiple similar clicks exist. Only proceed with attribution if you accept lower confidence.
+
+❓ **Probabilistic matching returns an error**
+
+Check your network connection and ensure the domain parameter is correct. The API endpoint must be reachable.
 
 Clipboard might contain text that is not a URL.
 
 ## ❓ FAQ
 
-Does this plugin track users?
+**Does this plugin track users?**
 
-No. 100% offline. No analytics. No network calls.
+Core features (Install Referrer API & clipboard reading) are 100% offline with no network calls. Optional probabilistic matching and tracking APIs make network calls to the Smler API only when explicitly invoked.
 
-Can I clear Android referrer?
+**Can I use this without making network calls?**
+
+Yes. Simply don't call `getProbabilisticMatch()` or `fetchTrackingData()`. The basic Install Referrer and clipboard features work completely offline.
+
+**Can I clear Android referrer?**
 
 No. Google Play controls it. You can ignore it after reading.
 

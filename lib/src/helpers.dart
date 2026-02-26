@@ -1,5 +1,7 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:http/http.dart' as http;
+import 'package:device_info_plus/device_info_plus.dart';
 
 class HelperReferrer {
   /// Returns true if [clipboard] deep link matches [pattern],
@@ -209,6 +211,134 @@ class HelperReferrer {
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         return data;
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}',
+          'message': response.body,
+        };
+      }
+    } catch (e) {
+      return {
+        'error': 'Exception',
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Performs probabilistic matching to link install events to clicks.
+  ///
+  /// [domain] - Domain name (required)
+  /// [clickId] - Optional click ID for additional matching
+  ///
+  /// Device and OS information are automatically extracted from the current platform.
+  ///
+  /// Returns a Map with match results including:
+  /// - matched: bool indicating if a match was found
+  /// - score: confidence score of the match
+  /// - matchedAttributes: attributes that matched
+  /// - clickDetails: details of the matched click
+  /// - shortUrl: complete short URL object with metadata
+  /// - fingerprint: device fingerprint data
+  /// - domain: extracted domain from shortUrl
+  /// - pathParams: map containing shortCode, dltHeader, and domain
+  ///
+  /// Example:
+  /// ```dart
+  /// final result = await HelperReferrer.getProbabilisticMatch(
+  ///   domain: 'example.com',
+  /// );
+  /// if (result['matched'] == true) {
+  ///   print('Match score: ${result['score']}');
+  ///   print('Short code: ${result['pathParams']['shortCode']}');
+  /// }
+  /// ```
+  static Future<Map<String, dynamic>> getProbabilisticMatch({
+    required String domain,
+    String? clickId,
+  }) async {
+    try {
+      // Validate required parameter
+      if (domain.trim().isEmpty) {
+        return {
+          'error': 'Validation',
+          'message': 'Domain is required',
+        };
+      }
+
+      // Automatically extract device and OS information
+      final deviceInfoPlugin = DeviceInfoPlugin();
+      String device = 'Unknown';
+      String os = 'Unknown';
+
+      if (Platform.isAndroid) {
+        final androidInfo = await deviceInfoPlugin.androidInfo;
+        device = '${androidInfo.manufacturer} ${androidInfo.model}';
+        os = 'Android ${androidInfo.version.release}';
+      } else if (Platform.isIOS) {
+        final iosInfo = await deviceInfoPlugin.iosInfo;
+        device = iosInfo.utsname.machine;
+        os = 'iOS ${iosInfo.systemVersion}';
+      } else if (Platform.isMacOS) {
+        final macInfo = await deviceInfoPlugin.macOsInfo;
+        device = macInfo.model;
+        os = 'macOS ${macInfo.osRelease}';
+      } else if (Platform.isWindows) {
+        final windowsInfo = await deviceInfoPlugin.windowsInfo;
+        device = windowsInfo.computerName;
+        os = 'Windows';
+      } else if (Platform.isLinux) {
+        final linuxInfo = await deviceInfoPlugin.linuxInfo;
+        device = linuxInfo.name;
+        os = 'Linux';
+      }
+
+      final url = 'https://smler.in/api/v2/track/probablistic';
+
+      final Map<String, dynamic> requestBody = {
+        'device': device,
+        'os': os,
+        'domain': domain,
+      };
+
+      if (clickId != null && clickId.isNotEmpty) {
+        requestBody['clickId'] = clickId;
+      }
+
+      final response = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(requestBody),
+      );
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        // Extract shortUrl data if available
+        final shortUrl = data['shortUrl'] as Map<String, dynamic>?;
+
+        // Build formatted response
+        final formattedResponse = <String, dynamic>{
+          'matched': data['matched'] ?? false,
+          'score': data['score'],
+          'matchedAttributes': data['matchedAttributes'],
+          'clickDetails': data['clickDetails'],
+          'shortUrl': shortUrl,
+          'fingerprint': data['fingerprint'],
+        };
+
+        // Add domain and pathParams if shortUrl exists
+        if (shortUrl != null) {
+          formattedResponse['domain'] = shortUrl['domain'];
+          formattedResponse['pathParams'] = {
+            'shortCode': shortUrl['shortCode'],
+            'dltHeader': shortUrl['dltHeader'],
+            'domain': shortUrl['domain'],
+          };
+        }
+
+        return formattedResponse;
       } else {
         return {
           'error': 'HTTP ${response.statusCode}',
