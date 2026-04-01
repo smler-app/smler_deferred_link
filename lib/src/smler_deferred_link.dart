@@ -200,7 +200,7 @@ class ReferrerInfo {
       return null;
     }
     final pathParams = extractShortCodeAndDltHeader();
-    
+
     // Extract domain from referrer URL
     String? domain;
     final ref = installReferrer?.trim();
@@ -210,7 +210,7 @@ class ReferrerInfo {
           : Uri.tryParse("https://dummy/$ref");
       domain = uri?.host;
     }
-    
+
     return HelperReferrer.fetchTrackingData(clickId, pathParams, domain);
   }
 
@@ -366,5 +366,17 @@ class SmlerDeferredLink {
         'smler_deferred_link: Unexpected error while reading clipboard text: $e',
       );
     }
+  }
+
+  /// When a deep link is opened, parse it and use the link to extract `dltHeader` and `shortCode`.
+  /// Refer function `extractShortCodeAndDltHeader` for more info.
+  ///
+  /// Hits the short link API endpoint:
+  /// `curl --location 'https://smler.in/api/v1/short?short=ZoxHzANoVQ&dltHeader=optional-dlt-header&domain=mydomain.com'`
+  ///
+  /// Returns the response for this endpoint.
+  /// Reference: https://documenter.getpostman.com/view/21304751/2sAY517zaC#12287d05-2d56-4e56-9e43-305da8ac32c3
+  static Future<Map<String, dynamic>> resolveDeepLink(String url) async {
+    return HelperReferrer.resolveDeepLinkData(url);
   }
 }

@@ -321,7 +321,7 @@ class HelperReferrer {
         // Build formatted response
         final formattedResponse = <String, dynamic>{
           'matched': data['matched'] ?? false,
-          'score': data['score'],
+          'score': (data['score'] as num?)?.toDouble(),
           'matchedAttributes': data['matchedAttributes'],
           'clickDetails': data['clickDetails'],
           'shortUrl': shortUrl,
@@ -331,6 +331,7 @@ class HelperReferrer {
         // Add domain and pathParams if shortUrl exists
         if (shortUrl != null) {
           formattedResponse['domain'] = shortUrl['domain'];
+          formattedResponse['originalUrl'] = shortUrl['originalUrl'];
           formattedResponse['pathParams'] = {
             'shortCode': shortUrl['shortCode'],
             'dltHeader': shortUrl['dltHeader'],
@@ -339,6 +340,107 @@ class HelperReferrer {
         }
 
         return formattedResponse;
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}',
+          'message': response.body,
+        };
+      }
+    } catch (e) {
+      return {
+        'error': 'Exception',
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Parses an opened deep link to extract [dltHeader] and [shortCode].
+  /// Refers to the logic in [extractShortCodeAndDltHeader].
+  ///
+  /// Hits the endpoint:
+  /// `curl --location 'https://smler.in/api/v1/short?short=ZoxHzANoVQ&dltHeader=optional-dlt-header&domain=mydomain.com'`
+  ///
+  /// Reference: https://documenter.getpostman.com/view/21304751/2sAY517zaC#12287d05-2d56-4e56-9e43-305da8ac32c3
+  static Future<Map<String, dynamic>> resolveDeepLinkData(String url) async {
+    try {
+      final uri = Uri.tryParse(url);
+      if (uri == null) {
+        return {'error': 'Invalid URL'};
+      }
+
+      final segments = uri.pathSegments.where((s) => s.isNotEmpty).toList();
+      String shortCode = '';
+      String? dltHeader;
+
+      if (segments.length >= 2) {
+        dltHeader = segments[0];
+        shortCode = segments[1];
+      } else if (segments.isNotEmpty) {
+        shortCode = segments[0];
+      } else {
+        return {'error': 'No short code found in URL'};
+      }
+
+      final domain = uri.host;
+      final queryParams = {
+        'short': shortCode,
+        if (dltHeader != null) 'dltHeader': dltHeader,
+        'domain': domain,
+      };
+
+      final apiUri = Uri.https('smler.in', '/api/v1/short', queryParams);
+
+      final response = await http.get(apiUri);
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body) as Map<String, dynamic>;
+      } else {
+        return {
+          'error': 'HTTP ${response.statusCode}',
+          'message': response.body,
+        };
+      }
+    } catch (e) {
+      return {
+        'error': 'Exception',
+        'message': e.toString(),
+      };
+    }
+  }
+
+  /// Triggers a webhook for the given [shortCode], [dltHeader], and [domain].
+  ///
+  /// Equivalent to:
+  /// ```
+  /// curl --location --request POST
+  ///   'https://smler.in/api/v1/webhook?dltHeader=BKMTCH&shortCode=Ffo6TOPIkd&domain=smler.in'
+  /// ```
+  ///
+  /// Call this after resolving a deep link to notify your backend that the
+  /// link was opened.
+  ///
+  /// Returns the parsed response body on success, or a map with an 'error'
+  /// key on failure.
+  static Future<Map<String, dynamic>> triggerWebhook({
+    required String shortCode,
+    required String domain,
+    String? dltHeader,
+  }) async {
+    try {
+      final queryParams = <String, String>{
+        'shortCode': shortCode,
+        'domain': domain,
+        if (dltHeader != null && dltHeader.isNotEmpty) 'dltHeader': dltHeader,
+      };
+
+      final uri = Uri.https('smler.in', '/api/v1/webhook', queryParams);
+
+      final response = await http.post(uri);
+
+      if (response.statusCode == 200) {
+        final body = response.body.trim();
+        if (body.isEmpty) return {'success': true};
+        return json.decode(body) as Map<String, dynamic>;
       } else {
         return {
           'error': 'HTTP ${response.statusCode}',
