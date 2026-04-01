@@ -1,3 +1,12 @@
+## 1.3.0
+- **Runtime Deep Link Resolution**
+  - Added `SmlerDeferredLink.resolveDeepLink(String url)` to resolve short links at runtime and extract full metadata (`shortCode`, `domain`, `dltHeader`, `originalUrl`)
+  - Added `HelperReferrer.resolveDeepLinkData(String url)` as the underlying helper
+- **Webhook Integration**
+  - Added `HelperReferrer.triggerWebhook({required String shortCode, required String domain, String? dltHeader})` to notify the Smler backend when a deep link is opened
+- **Documentation**
+  - README updated with `resolveDeepLink()` and `triggerWebhook()` API reference and usage examples
+
 ## 1.2.0
 - **Probabilistic Matching & Advanced Attribution**
   - Added `HelperReferrer.getProbabilisticMatch()` for device fingerprint-based install attribution

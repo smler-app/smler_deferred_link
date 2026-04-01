@@ -183,7 +183,7 @@ Add:
 
 ```yaml
 dependencies:
-  smler_deferred_link: <latest-version>
+  smler_deferred_link: ^1.3.0
 ```
 
 The plugin automatically includes:
@@ -222,7 +222,7 @@ No permissions required on both platforms.
 Reads Google Play Install Referrer once.
 
 ```dart
-final info = await SmlerkDeferredLink.getInstallReferrerAndroid();
+final info = await SmlerDeferredLink.getInstallReferrerAndroid();
 ```
 
 Returns: ReferrerInfo
@@ -426,7 +426,76 @@ if (res != null) {
 
 ```
 
-## 📊 Probabilistic Matching (Advanced Attribution)
+## � 3. **Runtime Deep Links**: resolveDeepLink()
+
+When a user opens a deep link while the app is already installed, call this to resolve the short link
+and retrieve its full metadata.
+
+```dart
+import 'package:app_links/app_links.dart';
+
+final appLinks = AppLinks();
+
+appLinks.uriLinkStream.listen((Uri uri) async {
+  try {
+    final data = await SmlerDeferredLink.resolveDeepLink(uri.toString());
+    final shortCode = data['shortCode'] as String?;
+    final domain    = data['domain']    as String?;
+    final originalUrl = data['originalUrl'] as String?;
+    print('Resolved: $shortCode on $domain → $originalUrl');
+  } catch (e) {
+    print('Error resolving link: $e');
+  }
+});
+```
+
+**Parameters:**
+- `url` (String): The full deep link URL that was opened
+
+**Returns:** `Map<String, dynamic>` with:
+- `shortCode` (String): The short URL code
+- `domain` (String): The domain the link belongs to
+- `dltHeader` (String?): Optional campaign/category header
+- `originalUrl` (String?): The original destination URL
+- Additional API fields from the Smler short-link response
+
+**Throws** if the URL is unparseable, contains no short code, or the API returns a non-200 status.
+
+---
+
+## 📌 4. **Webhook Notification**: triggerWebhook()
+
+Call this after `resolveDeepLink()` to notify the Smler backend that the link was opened. This
+enables accurate click-open attribution tracking.
+
+```dart
+import 'package:smler_deferred_link/src/helpers.dart';
+
+final data = await SmlerDeferredLink.resolveDeepLink(deepLinkUrl);
+
+final shortCode = data['shortCode'] as String?;
+final domain    = data['domain']    as String?;
+final dltHeader = data['dltHeader'] as String?;
+
+if (shortCode != null && domain != null) {
+  await HelperReferrer.triggerWebhook(
+    shortCode: shortCode,
+    domain: domain,
+    dltHeader: dltHeader,
+  );
+}
+```
+
+**Parameters:**
+- `shortCode` (required): Short code from the resolved link
+- `domain` (required): Domain from the resolved link
+- `dltHeader` (optional): Campaign header, if present
+
+**Returns:** `Map<String, dynamic>` — `{'success': true}` on success, or an `error` map on failure.
+
+---
+
+## �📊 Probabilistic Matching (Advanced Attribution)
 
 Probabilistic matching enables accurate install attribution by analyzing device and network fingerprints when traditional methods fail or return insufficient data. This is particularly useful for iOS users when clipboard matching fails or for validating Android install referrer data.
 
