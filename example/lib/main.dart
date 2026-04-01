@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
@@ -10,7 +11,8 @@ import 'package:app_links/app_links.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  debugPrint('🚀 Stack Deferred Link example starting on platform: ${Platform.operatingSystem}');
+  debugPrint(
+      '🚀 Stack Deferred Link example starting on platform: ${Platform.operatingSystem}');
   runApp(const MyApp());
 }
 
@@ -25,6 +27,8 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  static const _demoDomain = 'go.singh3y.dev';
+
   // Android data
   ReferrerInfo? _referrerInfo;
   Map<String, String> _parsedParams = {};
@@ -33,162 +37,309 @@ class _MyAppState extends State<MyApp> {
   IosClipboardDeepLinkResult? _iosDeepLink;
   Map<String, String> _iosParams = {};
 
-  // Probabilistic match data
+  // Probabilistic match data (iOS only)
   Map<String, dynamic>? _probabilisticMatchResult;
-  Map<String, dynamic>? _trackingData;
   bool _usedProbabilisticFallback = false;
 
+  // Deep link resolution data
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri?>? _deepLinkSub;
+  String? _latestReceivedDeepLink;
+  Map<String, dynamic>? _resolvedDeepLinkData;
+  bool _isResolvingDeepLink = false;
+  String? _resolveDeepLinkError;
+
   String? _errorMessage;
+  bool _isInitialLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _handleNavigation();
+    _setupDeepLinkListener();
+    unawaited(_loadInitialData());
   }
 
-  Future<void> _handleNavigation() async {
-    final appLinks = AppLinks();
-    final prefs = await SharedPreferences.getInstance();
-    final isFirstLaunch = prefs.getBool('smler_deferred_link.first_launch') ?? true;
+  @override
+  void dispose() {
+    _deepLinkSub?.cancel();
+    super.dispose();
+  }
 
-    if (isFirstLaunch) {
-      // Perform navigation logic here
-      debugPrint('Navigating to the deferred link destination...');
-      _loadPlatformData();
-      // Mark first-launch check completed
-      await prefs.setBool('smler_deferred_link.first_launch', false);
-    } else {
-      appLinks.uriLinkStream.listen((Uri? uri) {
+  double _asDouble(dynamic value) {
+    if (value is num) {
+      return value.toDouble();
+    }
+    if (value is String) {
+      return double.tryParse(value) ?? 0.0;
+    }
+    return 0.0;
+  }
+
+  Map<String, dynamic>? _asStringDynamicMap(dynamic value) {
+    if (value == null) {
+      return null;
+    }
+    if (value is Map<String, dynamic>) {
+      return value;
+    }
+    if (value is Map) {
+      return Map<String, dynamic>.from(value);
+    }
+    return null;
+  }
+
+  List<dynamic> _asDynamicList(dynamic value) {
+    if (value == null) {
+      return const [];
+    }
+    if (value is List) {
+      return value;
+    }
+    if (value is Map) {
+      return value.entries
+          .where((entry) => entry.value == true || entry.value == 1)
+          .map((entry) => entry.key)
+          .toList();
+    }
+    return [value];
+  }
+
+  void _setupDeepLinkListener() {
+    _deepLinkSub = _appLinks.uriLinkStream.listen(
+      (Uri? uri) {
         if (uri != null) {
-          debugPrint('Received deep link: $uri');
-          // Handle deep link navigation here
+          unawaited(_resolveAndShowDeepLink(uri.toString()));
         }
-      }, onError: (err) {
+      },
+      onError: (Object err) {
         debugPrint('Error receiving deep link: $err');
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _resolveDeepLinkError = err.toString();
+          _isResolvingDeepLink = false;
+        });
+      },
+    );
+  }
+
+  Future<void> _resolveAndShowDeepLink(String deepLink) async {
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _latestReceivedDeepLink = deepLink;
+      _resolvedDeepLinkData = null;
+      _resolveDeepLinkError = null;
+      _isResolvingDeepLink = true;
+    });
+
+    try {
+      final resolvedData = await SmlerDeferredLink.resolveDeepLink(deepLink);
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _resolvedDeepLinkData = resolvedData;
+        _resolveDeepLinkError = resolvedData['error']?.toString();
+        _isResolvingDeepLink = false;
+      });
+
+      debugPrint('Resolved deep link data: $resolvedData');
+
+      // Trigger a webhook to notify the backend that this deep link was opened.
+      final shortCode = resolvedData['shortCode'] as String?;
+      final domain = resolvedData['domain'] as String?;
+      final dltHeader = resolvedData['dltHeader'] as String?;
+      if (shortCode != null && domain != null) {
+        final webhookResult = await HelperReferrer.triggerWebhook(
+          shortCode: shortCode,
+          domain: domain,
+          dltHeader: dltHeader,
+        );
+        debugPrint('Webhook result: $webhookResult');
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      debugPrint('Error resolving deep link: $e');
+      setState(() {
+        _resolveDeepLinkError = e.toString();
+        _isResolvingDeepLink = false;
       });
     }
   }
 
-  /// -------------------------------------------------------------------------
-  /// MAIN LOGIC – Platform-aware entry
-  /// -------------------------------------------------------------------------
-  Future<void> _loadPlatformData() async {
+  String _formatResolvedData(Map<String, dynamic> data) {
+    const encoder = JsonEncoder.withIndent('  ');
+    return encoder.convert(data);
+  }
+
+  Future<void> _loadInitialData() async {
+    if (mounted) {
+      setState(() {
+        _isInitialLoading = true;
+      });
+    }
+
     try {
-      if (Platform.isAndroid) {
-        await _loadInstallReferrerAndroid();
-      } else if (Platform.isIOS) {
-        await _loadInstallReferrerIos();
+      // Deferred attribution (install referrer / clipboard / probabilistic)
+      // runs ONLY on the very first install. On subsequent app opens only
+      // the live deep-link listener (set up in initState) is active.
+      final prefs = await SharedPreferences.getInstance();
+      final isFirstInstall = prefs.getBool('smler_first_install') ?? true;
+
+      if (isFirstInstall) {
+        debugPrint(
+            '🆕 First install detected – running deferred attribution flow.');
+        await _runDeferredAttributionFlow();
+        await prefs.setBool('smler_first_install', false);
       } else {
+        debugPrint('🔁 Subsequent launch – skipping deferred attribution.');
+      }
+    } finally {
+      if (mounted) {
         setState(() {
-          _errorMessage = 'Platform not supported.';
+          _isInitialLoading = false;
         });
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // DEFERRED ATTRIBUTION FLOW (first install only)
+  //
+  // Determines how the user arrived at the app:
+  //   Android → Google Play Install Referrer
+  //   iOS     → Clipboard deep-link check, with probabilistic fallback
+  // ---------------------------------------------------------------------------
+
+  Future<void> _runDeferredAttributionFlow() async {
+    try {
+      if (Platform.isAndroid) {
+        await _runAndroidDeferredAttribution();
+      } else if (Platform.isIOS) {
+        await _runIosDeferredAttribution();
+      } else {
+        setState(() => _errorMessage = 'Platform not supported.');
+      }
     } catch (e) {
-      debugPrint('⚠ Unexpected Error in _loadPlatformData: $e');
+      debugPrint('⚠ Error in deferred attribution flow: $e');
       setState(() => _errorMessage = e.toString());
     }
   }
 
-  /// -------------------------------------------------------------------------
-  /// ANDROID – Load Install Referrer
-  /// -------------------------------------------------------------------------
-  Future<void> _loadInstallReferrerAndroid() async {
+  // ---------------------------------------------------------------------------
+  // ANDROID – Google Play Install Referrer
+  //
+  // Reads the referrer string set when the user tapped your Play Store link.
+  // After reading the referrer, it runs a probabilistic match as a supplement
+  // (useful when the referrer string is empty or generic).
+  // ---------------------------------------------------------------------------
+
+  Future<void> _runAndroidDeferredAttribution() async {
     try {
-      debugPrint('📥 Fetching Android Install Referrer…');
+      debugPrint('📥 [Android] Reading Google Play Install Referrer…');
 
       final info = await SmlerDeferredLink.getInstallReferrerAndroid();
 
-      debugPrint('✅ Install Referrer fetched successfully:');
-      debugPrint('Raw: ${info.installReferrer}');
-      debugPrint('Parsed params: ${info.asQueryParameters}');
+      debugPrint('✅ Install Referrer: ${info.installReferrer}');
+      debugPrint('   Parsed params: ${info.asQueryParameters}');
 
       setState(() {
         _referrerInfo = info;
         _parsedParams = info.asQueryParameters;
       });
 
-      // -------------------------------------------------------
-      // NEW: Android specific param extraction
-      // -------------------------------------------------------
-      final refParam = info.getParam("referrer");
-      debugPrint("Android getParam('referrer') => $refParam");
-
-      final uidParam = info.getParam("uid");
-      debugPrint("Android getParam('uid') => $uidParam");
-
-      // -------------------------------------------------------
-      // Probabilistic Matching Example
-      // -------------------------------------------------------
-      await _tryProbabilisticMatch('go.singh3y.dev');
+      // Extract individual params from the referrer string.
+      final referrer = info.getParam('referrer');
+      final uid = info.getParam('uid');
+      debugPrint('   referrer param → $referrer');
+      debugPrint('   uid param     → $uid');
     } on UnsupportedError catch (_) {
-      debugPrint(
-        '⚠ Install Referrer is not supported on this platform (iOS/web/desktop).',
-      );
-      setState(() => _errorMessage = 'Not supported on this platform');
+      // Thrown when this method is called on a non-Android platform.
+      setState(() =>
+          _errorMessage = 'Install Referrer is only available on Android.');
     } on PlatformException catch (e) {
-      debugPrint('❌ Plugin Error:');
-      debugPrint('Code: ${e.code}');
-      debugPrint('Message: ${e.message}');
+      debugPrint('❌ [Android] PlatformException: ${e.code} – ${e.message}');
       setState(() => _errorMessage = '${e.code}: ${e.message}');
     } catch (e) {
-      debugPrint('⚠ Unexpected Error (Android): $e');
+      debugPrint('⚠ [Android] Unexpected error: $e');
       setState(() => _errorMessage = e.toString());
     }
   }
 
-  /// -------------------------------------------------------------------------
-  /// iOS – Check clipboard for deep link
-  /// -------------------------------------------------------------------------
-  Future<void> _loadInstallReferrerIos() async {
+  // ---------------------------------------------------------------------------
+  // iOS – Clipboard deep-link check
+  //
+  // On iOS there is no install referrer API. Instead we check the clipboard
+  // for a deep link the user may have copied before installing the app.
+  // If nothing is found we fall back to probabilistic matching.
+  // ---------------------------------------------------------------------------
+
+  Future<void> _runIosDeferredAttribution() async {
     try {
-      debugPrint('📥 Checking iOS clipboard for deep link…');
+      debugPrint('📋 [iOS] Checking clipboard for a deep link…');
 
       final result = await SmlerDeferredLink.getInstallReferrerIos(
         deepLinks: [
-          'https://go.singh3y.dev/profile',
-          'http://go.singh3y.dev/profile',
-          'go.singh3y.dev/profile',
-          'go.singh3y.dev',
+          'https://$_demoDomain/profile',
+          'http://$_demoDomain/profile',
+          '$_demoDomain/profile',
+          _demoDomain,
         ],
       );
 
       if (result == null) {
-        debugPrint('⚠ No matching deep link found in clipboard.');
-        debugPrint('🔄 Falling back to probabilistic matching...');
-        
-        // Fall back to probabilistic matching when clipboard is empty
-        setState(() {
-          _usedProbabilisticFallback = true;
-        });
-        await _tryProbabilisticMatch('go.singh3y.dev');
+        // No matching link in clipboard – use probabilistic matching instead.
+        debugPrint(
+            '⚠ [iOS] No clipboard match – falling back to probabilistic attribution.');
+        setState(() => _usedProbabilisticFallback = true);
+        await _runProbabilisticAttribution();
         return;
       }
 
-      debugPrint('✅ iOS deep link found: ${result.fullReferralDeepLinkPath}');
-      debugPrint('Query params: ${result.queryParameters}');
+      debugPrint(
+          '✅ [iOS] Clipboard deep link: ${result.fullReferralDeepLinkPath}');
+      debugPrint('   Query params: ${result.queryParameters}');
 
       setState(() {
         _iosDeepLink = result;
         _iosParams = result.queryParameters;
       });
 
-      final referrer = result.getParam('referrer');
-      debugPrint('iOS getParam("referrer") => $referrer');
-    } on UnsupportedError catch (e) {
-      debugPrint('Not supported on this platform (iOS method): $e');
-      setState(() => _errorMessage = 'Not supported on this platform');
+      // Resolve the deep link to fetch full short-URL metadata.
+      await _resolveAndShowDeepLink(result.fullReferralDeepLinkPath);
+
+      debugPrint('   referrer param → ${result.getParam("referrer")}');
+    } on UnsupportedError catch (_) {
+      // Thrown when called on a non-iOS platform.
+      setState(() => _errorMessage =
+          'Clipboard deep-link check is only available on iOS.');
     } on PlatformException catch (e) {
-      debugPrint('❌ iOS Clipboard Error: ${e.code} ${e.message}');
+      debugPrint('❌ [iOS] PlatformException: ${e.code} – ${e.message}');
       setState(() => _errorMessage = '${e.code}: ${e.message}');
     } catch (e) {
-      debugPrint('⚠ Unexpected Error (iOS): $e');
+      debugPrint('⚠ [iOS] Unexpected error: $e');
       setState(() => _errorMessage = e.toString());
     }
   }
 
-  /// -------------------------------------------------------------------------
-  /// Probabilistic Matching
-  /// -------------------------------------------------------------------------
+  // ---------------------------------------------------------------------------
+  // PROBABILISTIC ATTRIBUTION (iOS only)
+  //
+  // Fallback when clipboard is empty. Matches the install event to a click
+  // using device fingerprinting.
+  // ---------------------------------------------------------------------------
+
+  Future<void> _runProbabilisticAttribution() async {
+    await _tryProbabilisticMatch(_demoDomain);
+  }
+
   Future<void> _tryProbabilisticMatch(String domain) async {
     try {
       debugPrint('🎲 Attempting probabilistic match for domain: $domain');
@@ -198,7 +349,8 @@ class _MyAppState extends State<MyApp> {
       );
 
       if (result.containsKey('error')) {
-        debugPrint('❌ Probabilistic match error: ${result['error']} - ${result['message']}');
+        debugPrint(
+            '❌ Probabilistic match error: ${result['error']} - ${result['message']}');
         setState(() {
           _errorMessage = 'Probabilistic match failed: ${result['message']}';
         });
@@ -206,7 +358,7 @@ class _MyAppState extends State<MyApp> {
       }
 
       final matched = result['matched'] as bool? ?? false;
-      final score = result['score'] as double? ?? 0.0;
+      final score = _asDouble(result['score']);
 
       debugPrint('✅ Probabilistic match result:');
       debugPrint('   Matched: $matched');
@@ -216,64 +368,9 @@ class _MyAppState extends State<MyApp> {
       setState(() {
         _probabilisticMatchResult = result;
       });
-
-      // If match score is high enough (> 0.65), fetch tracking data
-      if (matched && score > 0.65) {
-        debugPrint('🎯 High confidence match (score: $score > 0.65)');
-        debugPrint('📊 Fetching tracking data...');
-
-        final pathParams = result['pathParams'] as Map<String, dynamic>?;
-        final clickDetails = result['clickDetails'] as Map<String, dynamic>?;
-        final clickId = clickDetails?['id'] as String?;
-
-        if (clickId != null && pathParams != null) {
-          await _fetchTrackingData(
-            clickId,
-            Map<String, String?>.from(pathParams),
-            result['domain'] as String?,
-          );
-        } else {
-          debugPrint('⚠ Missing clickId or pathParams for tracking data');
-        }
-      } else {
-        debugPrint('⚠ Match score too low ($score <= 0.65), skipping tracking data fetch');
-      }
     } catch (e) {
       debugPrint('⚠ Error in probabilistic matching: $e');
       setState(() => _errorMessage = 'Probabilistic match error: $e');
-    }
-  }
-
-  /// -------------------------------------------------------------------------
-  /// Fetch Tracking Data
-  /// -------------------------------------------------------------------------
-  Future<void> _fetchTrackingData(
-    String clickId,
-    Map<String, String?> pathParams,
-    String? domain,
-  ) async {
-    try {
-      debugPrint('📡 Fetching tracking data for clickId: $clickId');
-
-      final trackingData = await HelperReferrer.fetchTrackingData(
-        clickId,
-        pathParams,
-        domain,
-      );
-
-      if (trackingData.containsKey('error')) {
-        debugPrint('❌ Tracking data error: ${trackingData['error']} - ${trackingData['message']}');
-        return;
-      }
-
-      debugPrint('✅ Tracking data fetched successfully:');
-      debugPrint('   Data: $trackingData');
-
-      setState(() {
-        _trackingData = trackingData;
-      });
-    } catch (e) {
-      debugPrint('⚠ Error fetching tracking data: $e');
     }
   }
 
@@ -313,166 +410,144 @@ class _MyAppState extends State<MyApp> {
     }
   }
 
-  /// Android UI – show referrer & parsed params
+  /// Android – Install Referrer flow
   Widget _buildAndroidBody() {
-    if (_referrerInfo == null && _probabilisticMatchResult == null) {
+    if (_isInitialLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (_referrerInfo == null) {
+      return _buildEmptyState('No install referrer data available.');
+    }
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '🎯 Install Referrer Details (Android)',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
+          const Text('Install Referrer',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text('Raw: ${_referrerInfo!.installReferrer ?? 'empty'}'),
           const SizedBox(height: 12),
-          if (_referrerInfo != null) ...[
-            Text('Raw Referrer: ${_referrerInfo!.installReferrer}'),
-            const SizedBox(height: 12),
-            const Text(
-              'Parsed Parameters',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            if (_parsedParams.isEmpty)
-              const Text('No query parameters found.')
-            else
-              ..._parsedParams.entries.map(
-                (e) => Text('• ${e.key} = ${e.value}'),
-              ),
-          ],
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 20),
-          _buildProbabilisticMatchSection(),
+          if (_parsedParams.isEmpty)
+            const Text('No parsed parameters.')
+          else
+            ..._parsedParams.entries.map((e) => Text('${e.key}: ${e.value}')),
+          const Divider(height: 32),
+          _buildDeepLinkResolutionSection(),
         ],
       ),
     );
   }
 
-  /// iOS UI – show full deep link & query params
+  /// iOS – Clipboard deep-link check, with probabilistic fallback
   Widget _buildIosBody() {
-    if (_iosDeepLink == null && _probabilisticMatchResult == null) {
+    if (_isInitialLoading) {
       return const Center(child: CircularProgressIndicator());
     }
 
+    if (_iosDeepLink == null && _probabilisticMatchResult == null) {
+      return _buildEmptyState('No clipboard or probabilistic data available.');
+    }
+
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            '🍎 Clipboard Deep Link (iOS)',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
           if (_iosDeepLink != null) ...[
-            Text('Full Deep Link: ${_iosDeepLink!.fullReferralDeepLinkPath}'),
-            const SizedBox(height: 12),
-            const Text(
-              'Query Parameters',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-            ),
+            const Text('Clipboard Deep Link',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            Text(_iosDeepLink!.fullReferralDeepLinkPath),
             const SizedBox(height: 8),
             if (_iosParams.isEmpty)
-              const Text('No query parameters found.')
+              const Text('No query parameters.')
             else
-              ..._iosParams.entries.map((e) => Text('• ${e.key} = ${e.value}')),
+              ..._iosParams.entries.map((e) => Text('${e.key}: ${e.value}')),
+            const Divider(height: 32),
           ],
-          if (_usedProbabilisticFallback) ...[
+          if (_usedProbabilisticFallback)
             const Text(
-              '⚠ No clipboard match found',
-              style: TextStyle(fontSize: 14, fontStyle: FontStyle.italic, color: Colors.orange),
+              'No clipboard match – using probabilistic fallback.',
+              style: TextStyle(color: Colors.orange),
             ),
-            const SizedBox(height: 8),
-            const Text(
-              '🔄 Using Probabilistic Fallback',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.blue),
-            ),
-          ],
-          const SizedBox(height: 20),
-          const Divider(),
-          const SizedBox(height: 20),
           _buildProbabilisticMatchSection(),
+          const Divider(height: 32),
+          _buildDeepLinkResolutionSection(),
         ],
       ),
     );
   }
 
-  /// Probabilistic Match Section
+  /// Probabilistic Match Section (iOS only)
   Widget _buildProbabilisticMatchSection() {
-    if (_probabilisticMatchResult == null) {
-      return const SizedBox.shrink();
-    }
+    if (_probabilisticMatchResult == null) return const SizedBox.shrink();
 
     final matched = _probabilisticMatchResult!['matched'] as bool? ?? false;
-    final score = _probabilisticMatchResult!['score'] as double? ?? 0.0;
-    final matchedAttributes = _probabilisticMatchResult!['matchedAttributes'] as List?;
-    final pathParams = _probabilisticMatchResult!['pathParams'] as Map?;
+    final score = _asDouble(_probabilisticMatchResult!['score']);
+    final attrs =
+        _asDynamicList(_probabilisticMatchResult!['matchedAttributes']);
+    final pathParams =
+        _asStringDynamicMap(_probabilisticMatchResult!['pathParams']);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          '🎲 Probabilistic Match Results',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          'Matched: ${matched ? "✅ Yes" : "❌ No"}',
-          style: TextStyle(
-            color: matched ? Colors.green : Colors.red,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
+        const Text('Probabilistic Match',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        Text('Confidence Score: ${score.toStringAsFixed(3)}'),
-        const SizedBox(height: 8),
-        if (score > 0.65)
-          const Text(
-            '🎯 High confidence (> 0.65) - Tracking data fetched',
-            style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600),
-          )
-        else
-          const Text(
-            '⚠ Low confidence (<= 0.65) - Skipped tracking',
-            style: TextStyle(color: Colors.orange, fontStyle: FontStyle.italic),
-          ),
-        const SizedBox(height: 12),
-        if (matchedAttributes != null && matchedAttributes.isNotEmpty) ...[
-          const Text(
-            'Matched Attributes:',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
+        Text('Matched: ${matched ? 'Yes' : 'No'}'),
+        Text('Score: ${score.toStringAsFixed(3)}'),
+        if (attrs.isNotEmpty) ...[
           const SizedBox(height: 8),
-          ...matchedAttributes.map((attr) => Text('• $attr')),
-          const SizedBox(height: 12),
+          ...attrs.map((a) => Text('• $a'))
         ],
         if (pathParams != null) ...[
-          const Text(
-            'Path Parameters:',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-          ),
           const SizedBox(height: 8),
-          Text('Short Code: ${pathParams['shortCode'] ?? 'N/A'}'),
-          Text('DLT Header: ${pathParams['dltHeader'] ?? 'N/A'}'),
-          Text('Domain: ${pathParams['domain'] ?? 'N/A'}'),
-          const SizedBox(height: 12),
-        ],
-        if (_trackingData != null) ...[
-          const Divider(),
-          const SizedBox(height: 12),
-          const Text(
-            '📊 Tracking Data',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text('Data: ${_trackingData.toString()}'),
+          Text('Short Code: ${pathParams['shortCode'] ?? '-'}'),
+          Text('Domain: ${pathParams['domain'] ?? '-'}')
         ],
       ],
+    );
+  }
+
+  /// Deep Link Resolution – shown when a deep link is opened at runtime
+  Widget _buildDeepLinkResolutionSection() {
+    if (_latestReceivedDeepLink == null) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Deep Link Opened',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Text(_latestReceivedDeepLink!),
+        const SizedBox(height: 12),
+        const Text('Resolved Response:',
+            style: TextStyle(fontWeight: FontWeight.w600)),
+        const SizedBox(height: 4),
+        if (_isResolvingDeepLink)
+          const CircularProgressIndicator()
+        else if (_resolveDeepLinkError != null)
+          Text('Error: $_resolveDeepLinkError',
+              style: const TextStyle(color: Colors.red))
+        else if (_resolvedDeepLinkData != null)
+          Text(_formatResolvedData(_resolvedDeepLinkData!),
+              style: const TextStyle(fontFamily: 'monospace'))
+        else
+          const Text('No data.'),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState(String message) {
+    return Center(
+      child: Text(
+        message,
+        textAlign: TextAlign.center,
+      ),
     );
   }
 }
