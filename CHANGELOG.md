@@ -1,3 +1,9 @@
+## 1.3.1
+- **resolveDeepLink / resolveDeepLinkData**
+  - Added optional `triggerWebhook` parameter; when provided, it is forwarded to the Smler `/api/v1/short` endpoint as a query param, letting the backend fire the configured webhook automatically in the same request
+- **Example**
+  - Updated `_resolveAndShowDeepLink` to pass `triggerWebhook: true` to `SmlerDeferredLink.resolveDeepLink()`, replacing the previous two-step manual `HelperReferrer.triggerWebhook()` call
+
 ## 1.3.0
 - **Runtime Deep Link Resolution**
   - Added `SmlerDeferredLink.resolveDeepLink(String url)` to resolve short links at runtime and extract full metadata (`shortCode`, `domain`, `dltHeader`, `originalUrl`)

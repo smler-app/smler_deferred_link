@@ -137,7 +137,10 @@ class _MyAppState extends State<MyApp> {
     });
 
     try {
-      final resolvedData = await SmlerDeferredLink.resolveDeepLink(deepLink);
+      final resolvedData = await SmlerDeferredLink.resolveDeepLink(
+        deepLink,
+        triggerWebhook: true,
+      );
       if (!mounted) {
         return;
       }
@@ -149,19 +152,6 @@ class _MyAppState extends State<MyApp> {
       });
 
       debugPrint('Resolved deep link data: $resolvedData');
-
-      // Trigger a webhook to notify the backend that this deep link was opened.
-      final shortCode = resolvedData['shortCode'] as String?;
-      final domain = resolvedData['domain'] as String?;
-      final dltHeader = resolvedData['dltHeader'] as String?;
-      if (shortCode != null && domain != null) {
-        final webhookResult = await HelperReferrer.triggerWebhook(
-          shortCode: shortCode,
-          domain: domain,
-          dltHeader: dltHeader,
-        );
-        debugPrint('Webhook result: $webhookResult');
-      }
     } catch (e) {
       if (!mounted) {
         return;

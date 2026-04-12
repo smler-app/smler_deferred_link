@@ -374,9 +374,16 @@ class SmlerDeferredLink {
   /// Hits the short link API endpoint:
   /// `curl --location 'https://smler.in/api/v1/short?short=ZoxHzANoVQ&dltHeader=optional-dlt-header&domain=mydomain.com'`
   ///
+  /// If [triggerWebhook] is provided, it is forwarded to the Smler endpoint
+  /// as the `triggerWebhook` query parameter, instructing the backend to fire
+  /// the configured webhook automatically as part of the resolution call.
+  ///
   /// Returns the response for this endpoint.
   /// Reference: https://documenter.getpostman.com/view/21304751/2sAY517zaC#12287d05-2d56-4e56-9e43-305da8ac32c3
-  static Future<Map<String, dynamic>> resolveDeepLink(String url) async {
-    return HelperReferrer.resolveDeepLinkData(url);
+  static Future<Map<String, dynamic>> resolveDeepLink(
+    String url, {
+    bool? triggerWebhook,
+  }) async {
+    return HelperReferrer.resolveDeepLinkData(url, triggerWebhook: triggerWebhook);
   }
 }

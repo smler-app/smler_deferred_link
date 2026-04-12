@@ -361,7 +361,10 @@ class HelperReferrer {
   /// `curl --location 'https://smler.in/api/v1/short?short=ZoxHzANoVQ&dltHeader=optional-dlt-header&domain=mydomain.com'`
   ///
   /// Reference: https://documenter.getpostman.com/view/21304751/2sAY517zaC#12287d05-2d56-4e56-9e43-305da8ac32c3
-  static Future<Map<String, dynamic>> resolveDeepLinkData(String url) async {
+  static Future<Map<String, dynamic>> resolveDeepLinkData(
+    String url, {
+    bool? triggerWebhook,
+  }) async {
     try {
       final uri = Uri.tryParse(url);
       if (uri == null) {
@@ -386,6 +389,7 @@ class HelperReferrer {
         'short': shortCode,
         if (dltHeader != null) 'dltHeader': dltHeader,
         'domain': domain,
+        if (triggerWebhook != null) 'triggerWebhook': triggerWebhook.toString(),
       };
 
       final apiUri = Uri.https('smler.in', '/api/v1/short', queryParams);

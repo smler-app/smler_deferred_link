@@ -449,8 +449,19 @@ appLinks.uriLinkStream.listen((Uri uri) async {
 });
 ```
 
+Pass `triggerWebhook: true` to have the Smler backend fire your configured webhook automatically as
+part of the same request, without a second API call:
+
+```dart
+final data = await SmlerDeferredLink.resolveDeepLink(
+  uri.toString(),
+  triggerWebhook: true,
+);
+```
+
 **Parameters:**
 - `url` (String): The full deep link URL that was opened
+- `triggerWebhook` (bool?, optional): When `true`, instructs the Smler backend to trigger the configured webhook as part of this resolution call
 
 **Returns:** `Map<String, dynamic>` with:
 - `shortCode` (String): The short URL code
@@ -467,6 +478,9 @@ appLinks.uriLinkStream.listen((Uri uri) async {
 
 Call this after `resolveDeepLink()` to notify the Smler backend that the link was opened. This
 enables accurate click-open attribution tracking.
+
+> **Tip:** You can skip this separate call by passing `triggerWebhook: true` directly to
+> `resolveDeepLink()` (see above).
 
 ```dart
 import 'package:smler_deferred_link/src/helpers.dart';
