@@ -5,7 +5,6 @@ import 'dart:io' show Platform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:smler_deferred_link/smler_deferred_link.dart';
-import 'package:smler_deferred_link/src/helpers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
 
@@ -224,11 +223,11 @@ class _MyAppState extends State<MyApp> {
   }
 
   // ---------------------------------------------------------------------------
-  // ANDROID – Google Play Install Referrer
+  // ANDROID – Google Play Install Referrer + probabilistic fallback
   //
   // Reads the referrer string set when the user tapped your Play Store link.
-  // After reading the referrer, it runs a probabilistic match as a supplement
-  // (useful when the referrer string is empty or generic).
+  // When no clickId is present in the referrer (empty or generic referrer),
+  // falls back to probabilistic matching using device fingerprinting.
   // ---------------------------------------------------------------------------
 
   Future<void> _runAndroidDeferredAttribution() async {
@@ -250,6 +249,17 @@ class _MyAppState extends State<MyApp> {
       final uid = info.getParam('uid');
       debugPrint('   referrer param → $referrer');
       debugPrint('   uid param     → $uid');
+
+      // If no clickId is present in the referrer, fall back to probabilistic
+      // matching as a supplement for attribution.
+      final clickId = info.getParam('clickId');
+      debugPrint('   clickId param → $clickId');
+      if (clickId == "") {
+        debugPrint(
+            '⚠ [Android] No clickId in referrer – falling back to probabilistic attribution.');
+        setState(() => _usedProbabilisticFallback = true);
+        await _runProbabilisticAttribution();
+      }
     } on UnsupportedError catch (_) {
       // Thrown when this method is called on a non-Android platform.
       setState(() =>
@@ -320,10 +330,11 @@ class _MyAppState extends State<MyApp> {
   }
 
   // ---------------------------------------------------------------------------
-  // PROBABILISTIC ATTRIBUTION (iOS only)
+  // PROBABILISTIC ATTRIBUTION (Android & iOS)
   //
-  // Fallback when clipboard is empty. Matches the install event to a click
-  // using device fingerprinting.
+  // Fallback when primary attribution is unavailable (empty referrer on Android
+  // or empty clipboard on iOS). Matches the install event to a click using
+  // device fingerprinting.
   // ---------------------------------------------------------------------------
 
   Future<void> _runProbabilisticAttribution() async {
@@ -334,7 +345,7 @@ class _MyAppState extends State<MyApp> {
     try {
       debugPrint('🎲 Attempting probabilistic match for domain: $domain');
 
-      final result = await HelperReferrer.getProbabilisticMatch(
+      final result = await SmlerDeferredLink.getProbabilisticMatch(
         domain: domain,
       );
 

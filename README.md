@@ -183,7 +183,7 @@ Add:
 
 ```yaml
 dependencies:
-  smler_deferred_link: ^1.3.0
+  smler_deferred_link: ^1.3.2
 ```
 
 The plugin automatically includes:
@@ -533,7 +533,7 @@ Probabilistic matching enables accurate install attribution by analyzing device 
 Performs probabilistic matching to link install events to clicks.
 
 ```dart
-final result = await HelperReferrer.getProbabilisticMatch(
+final result = await SmlerDeferredLink.getProbabilisticMatch(
   domain: 'example.com',
   clickId: 'optional-click-id', // optional
 );
@@ -556,9 +556,7 @@ final result = await HelperReferrer.getProbabilisticMatch(
 **Example:**
 
 ```dart
-import 'package:smler_deferred_link/src/helpers.dart';
-
-final result = await HelperReferrer.getProbabilisticMatch(
+final result = await SmlerDeferredLink.getProbabilisticMatch(
   domain: 'example.com',
 );
 
@@ -639,7 +637,7 @@ Future<void> _loadInstallReferrerIos() async {
 }
 
 Future<void> _tryProbabilisticMatch(String domain) async {
-  final result = await HelperReferrer.getProbabilisticMatch(
+  final result = await SmlerDeferredLink.getProbabilisticMatch(
     domain: domain,
   );
 
@@ -680,7 +678,7 @@ Future<void> _loadInstallReferrerAndroid() async {
   debugPrint('Referrer: ${info.installReferrer}');
   
   // Enhance with probabilistic matching
-  final result = await HelperReferrer.getProbabilisticMatch(
+  final result = await SmlerDeferredLink.getProbabilisticMatch(
     domain: 'example.com',
   );
   

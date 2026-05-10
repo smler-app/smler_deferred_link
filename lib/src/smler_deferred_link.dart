@@ -368,6 +368,39 @@ class SmlerDeferredLink {
     }
   }
 
+  /// Performs probabilistic matching to link an install event to a click,
+  /// available on both **Android** and **iOS**.
+  ///
+  /// Device and OS information are extracted automatically from the current
+  /// platform.  Pass [domain] to scope the match to your short-link domain.
+  /// Optionally pass [clickId] when you already have one (e.g. from a Play
+  /// Store referrer that lacks other attribution).
+  ///
+  /// Returns a Map with match results including:
+  /// - `matched`: bool indicating if a match was found
+  /// - `score`: confidence score of the match
+  /// - `matchedAttributes`: attributes that contributed to the match
+  /// - `clickDetails`: details of the matched click
+  /// - `shortUrl`: complete short URL object with metadata
+  /// - `pathParams`: map containing `shortCode`, `dltHeader`, and `domain`
+  ///
+  /// Example:
+  /// ```dart
+  /// final result = await SmlerDeferredLink.getProbabilisticMatch(
+  ///   domain: 'example.com',
+  /// );
+  /// if (result['matched'] == true) {
+  ///   print('Match score: \${result['score']}');
+  ///   print('Short code: \${result['pathParams']['shortCode']}');
+  /// }
+  /// ```
+  static Future<Map<String, dynamic>> getProbabilisticMatch({
+    required String domain,
+    String? clickId,
+  }) {
+    return HelperReferrer.getProbabilisticMatch(domain: domain, clickId: clickId);
+  }
+
   /// When a deep link is opened, parse it and use the link to extract `dltHeader` and `shortCode`.
   /// Refer function `extractShortCodeAndDltHeader` for more info.
   ///

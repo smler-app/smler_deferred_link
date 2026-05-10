@@ -1,3 +1,11 @@
+## 1.3.2
+- **SmlerDeferredLink.getProbabilisticMatch()**
+  - Exposed `getProbabilisticMatch()` directly on `SmlerDeferredLink` (previously only available via `HelperReferrer`), removing the need to import `src/helpers.dart`
+- **Example**
+  - Removed internal `src/helpers.dart` import; probabilistic matching now calls `SmlerDeferredLink.getProbabilisticMatch()` via the public API
+  - Android: added automatic probabilistic fallback when `clickId` is absent in the Play Store referrer string
+  - Probabilistic attribution section updated to cover both Android and iOS scenarios
+
 ## 1.3.1
 - **resolveDeepLink / resolveDeepLinkData**
   - Added optional `triggerWebhook` parameter; when provided, it is forwarded to the Smler `/api/v1/short` endpoint as a query param, letting the backend fire the configured webhook automatically in the same request
