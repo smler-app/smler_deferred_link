@@ -1,3 +1,9 @@
+## 1.3.3
+- **README**
+  - Shows the import line after the install step
+  - The `triggerWebhook()` and `fetchTrackingData()` examples now import the main library, and mark the `src/helpers.dart` import that `HelperReferrer` still needs
+  - Removed the Popularity badge, which pub.dev no longer reports
+
 ## 1.3.2
 - **SmlerDeferredLink.getProbabilisticMatch()**
   - Exposed `getProbabilisticMatch()` directly on `SmlerDeferredLink` (previously only available via `HelperReferrer`), removing the need to import `src/helpers.dart`

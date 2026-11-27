@@ -182,7 +182,7 @@ Add:
 
 ```yaml
 dependencies:
-  smler_deferred_link: ^1.3.2
+  smler_deferred_link: ^1.3.3
 ```
 
 Then import it wherever you use it:
