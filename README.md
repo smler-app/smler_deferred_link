@@ -3,7 +3,6 @@
 [![Pub Version](https://img.shields.io/pub/v/smler_deferred_link)](https://pub.dev/packages/smler_deferred_link)
 [![Pub Likes](https://img.shields.io/pub/likes/smler_deferred_link)](https://pub.dev/packages/smler_deferred_link)
 [![Pub Points](https://img.shields.io/pub/points/smler_deferred_link)](https://pub.dev/packages/smler_deferred_link)
-[![Popularity](https://img.shields.io/pub/popularity/smler_deferred_link)](https://pub.dev/packages/smler_deferred_link)
 
 A powerful yet lightweight Flutter plugin for deferred deep linking built for real production apps.
 It helps you extract referral information and deep link parameters on both Android and iOS without
@@ -184,6 +183,12 @@ Add:
 ```yaml
 dependencies:
   smler_deferred_link: ^1.3.2
+```
+
+Then import it wherever you use it:
+
+```dart
+import 'package:smler_deferred_link/smler_deferred_link.dart';
 ```
 
 The plugin automatically includes:
@@ -483,6 +488,8 @@ enables accurate click-open attribution tracking.
 > `resolveDeepLink()` (see above).
 
 ```dart
+import 'package:smler_deferred_link/smler_deferred_link.dart';
+// HelperReferrer is not exported from the main library yet.
 import 'package:smler_deferred_link/src/helpers.dart';
 
 final data = await SmlerDeferredLink.resolveDeepLink(deepLinkUrl);
@@ -578,6 +585,10 @@ if (result['matched'] == true) {
 Fetches detailed tracking data from the Smler API when you have a `clickId`.
 
 ```dart
+import 'package:smler_deferred_link/smler_deferred_link.dart';
+// HelperReferrer is not exported from the main library yet.
+import 'package:smler_deferred_link/src/helpers.dart';
+
 final trackingData = await HelperReferrer.fetchTrackingData(
   clickId,
   pathParams,
